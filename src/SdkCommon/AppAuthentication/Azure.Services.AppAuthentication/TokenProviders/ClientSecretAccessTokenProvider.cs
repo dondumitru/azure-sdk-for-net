@@ -14,11 +14,12 @@ namespace Microsoft.Azure.Services.AppAuthentication
     {
         private readonly string _clientId;
         private readonly string _clientSecret;
+        private readonly string _clientSecretToRedact;
         private readonly string _tenantId;
         private readonly string _azureAdInstance;
         private readonly IAuthenticationContext _authenticationContext;
 
-        internal ClientSecretAccessTokenProvider(string clientId, string clientSecret,
+        internal ClientSecretAccessTokenProvider(string clientId, string clientSecret, string clientSecretToRedact,
             string tenantId, string azureAdInstance, IAuthenticationContext authenticationContext = null)
         {
             if (string.IsNullOrWhiteSpace(clientId))
@@ -31,8 +32,14 @@ namespace Microsoft.Azure.Services.AppAuthentication
                 throw new ArgumentNullException(nameof(clientSecret));
             }
 
+            if (string.IsNullOrWhiteSpace(clientSecretToRedact))
+            {
+                throw new ArgumentNullException(nameof(clientSecretToRedact));
+            }
+
             _clientId = clientId;
             _clientSecret = clientSecret;
+            _clientSecretToRedact = clientSecretToRedact; // the connection string might hold an encoded version of the client secret, and we need the literal in the connection string in order to perform redaction
             _tenantId = tenantId;
             _azureAdInstance = azureAdInstance;
             _authenticationContext = authenticationContext ?? new AdalAuthenticationContext();
@@ -76,7 +83,7 @@ namespace Microsoft.Azure.Services.AppAuthentication
             }
 
             // The exception will have the connection string, but with the secret redacted. 
-            throw new AzureServiceTokenProviderException(ConnectionString?.Replace(_clientSecret, "<<Redacted>>"), 
+            throw new AzureServiceTokenProviderException(ConnectionString?.Replace(_clientSecretToRedact, "<<Redacted>>"), 
                 resource, authority, $"{AzureServiceTokenProviderException.GenericErrorMessage} {errorMessage}");
 
         }

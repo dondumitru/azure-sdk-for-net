@@ -20,7 +20,7 @@ namespace Microsoft.Azure.Services.AppAuthentication.Unit.Tests
             MockAuthenticationContext mockAuthenticationContext = new MockAuthenticationContext(MockAuthenticationContext.MockAuthenticationContextTestType.AcquireTokenAsyncClientCredentialSuccess);
 
             // Create ClientSecretAccessTokenProvider instance
-            ClientSecretAccessTokenProvider clientSecretAccessTokenProvider = new ClientSecretAccessTokenProvider(Constants.TestAppId, Constants.ClientSecret, Constants.TenantId, Constants.AzureAdInstance, mockAuthenticationContext);
+            ClientSecretAccessTokenProvider clientSecretAccessTokenProvider = new ClientSecretAccessTokenProvider(Constants.TestAppId, Constants.ClientSecret, Constants.ClientSecret, Constants.TenantId, Constants.AzureAdInstance, mockAuthenticationContext);
 
             // Get the token
             var authResult = await clientSecretAccessTokenProvider.GetAuthResultAsync(Constants.KeyVaultResourceId, Constants.TenantId).ConfigureAwait(false);
@@ -37,7 +37,7 @@ namespace Microsoft.Azure.Services.AppAuthentication.Unit.Tests
         public async Task ClientSecretFailTest()
         {
             MockAuthenticationContext mockAuthenticationContext = new MockAuthenticationContext(MockAuthenticationContext.MockAuthenticationContextTestType.AcquireTokenAsyncClientCredentialFail);
-            ClientSecretAccessTokenProvider clientSecretAccessTokenProvider = new ClientSecretAccessTokenProvider(Constants.TestAppId, Constants.ClientSecret, Constants.TenantId, Constants.AzureAdInstance, mockAuthenticationContext);
+            ClientSecretAccessTokenProvider clientSecretAccessTokenProvider = new ClientSecretAccessTokenProvider(Constants.TestAppId, Constants.ClientSecret, Constants.ClientSecret, Constants.TenantId, Constants.AzureAdInstance, mockAuthenticationContext);
             var exception = await Assert.ThrowsAsync<AzureServiceTokenProviderException>(() => Task.Run(() => clientSecretAccessTokenProvider.GetAuthResultAsync(Constants.KeyVaultResourceId, string.Empty)));
 
             Assert.Contains(Constants.KeyVaultResourceId, exception.Message);
@@ -53,7 +53,7 @@ namespace Microsoft.Azure.Services.AppAuthentication.Unit.Tests
         public async Task ClientSecretFailTestWithTenant()
         {
             MockAuthenticationContext mockAuthenticationContext = new MockAuthenticationContext(MockAuthenticationContext.MockAuthenticationContextTestType.AcquireTokenAsyncException);
-            ClientSecretAccessTokenProvider clientSecretAccessTokenProvider = new ClientSecretAccessTokenProvider(Constants.TestAppId, Constants.ClientSecret, Constants.TenantId, Constants.AzureAdInstance, mockAuthenticationContext);
+            ClientSecretAccessTokenProvider clientSecretAccessTokenProvider = new ClientSecretAccessTokenProvider(Constants.TestAppId, Constants.ClientSecret, Constants.ClientSecret, Constants.TenantId, Constants.AzureAdInstance, mockAuthenticationContext);
             var exception = await Assert.ThrowsAsync<AzureServiceTokenProviderException>(() => Task.Run(() => clientSecretAccessTokenProvider.GetAuthResultAsync(Constants.KeyVaultResourceId, Constants.TenantId)));
 
             Assert.Contains(Constants.KeyVaultResourceId, exception.Message);
@@ -81,6 +81,24 @@ namespace Microsoft.Azure.Services.AppAuthentication.Unit.Tests
         }
 
         /// <summary>
+        /// Test that when AzureServiceTokenProvider fails to get token based on ClientSecretPercentEncodedConnString, the actual secret value is redacted in the exception. 
+        /// This is important so that the secret is not logged. 
+        /// </summary>
+        /// <returns></returns>
+        [Fact]
+        public async Task ClientSecretPercentEncodedRedactionTest()
+        {
+            AzureServiceTokenProvider azureServiceTokenProvider = new AzureServiceTokenProvider(Constants.ClientSecretPercentEncodedConnString);
+
+            var exception = await Assert.ThrowsAsync<AzureServiceTokenProviderException>(() => Task.Run(() => azureServiceTokenProvider.GetAccessTokenAsync(Constants.KeyVaultResourceId)));
+
+            Assert.Contains(Constants.KeyVaultResourceId, exception.Message);
+            Assert.Contains(Constants.TenantId, exception.Message);
+            Assert.Contains(Constants.Redacted, exception.Message);
+            Assert.DoesNotContain(Constants.ClientSecretPercentEncoded, exception.Message);
+        }
+
+        /// <summary>
         /// If the clientId is null or empty, an exception should be thrown. 
         /// </summary>
         [Fact]
@@ -90,12 +108,12 @@ namespace Microsoft.Azure.Services.AppAuthentication.Unit.Tests
             MockAuthenticationContext mockAuthenticationContext = new MockAuthenticationContext(MockAuthenticationContext.MockAuthenticationContextTestType.AcquireTokenAsyncClientCredentialSuccess);
 
             // Create ClientSecretAccessTokenProvider instance
-            var exception = Assert.Throws<ArgumentNullException>(() => new ClientSecretAccessTokenProvider(null, Constants.ClientSecret, Constants.TenantId, Constants.AzureAdInstance, mockAuthenticationContext));
+            var exception = Assert.Throws<ArgumentNullException>(() => new ClientSecretAccessTokenProvider(null, Constants.ClientSecret, Constants.ClientSecret, Constants.TenantId, Constants.AzureAdInstance, mockAuthenticationContext));
 
             Assert.Contains(Constants.CannotBeNullError, exception.ToString());
 
             // Create ClientSecretAccessTokenProvider instance
-            exception = Assert.Throws<ArgumentNullException>(() => new ClientSecretAccessTokenProvider(string.Empty, Constants.ClientSecret, Constants.TenantId, Constants.AzureAdInstance, mockAuthenticationContext));
+            exception = Assert.Throws<ArgumentNullException>(() => new ClientSecretAccessTokenProvider(string.Empty, Constants.ClientSecret, Constants.ClientSecret, Constants.TenantId, Constants.AzureAdInstance, mockAuthenticationContext));
 
             Assert.Contains(Constants.CannotBeNullError, exception.ToString());
         }
@@ -110,12 +128,32 @@ namespace Microsoft.Azure.Services.AppAuthentication.Unit.Tests
             MockAuthenticationContext mockAuthenticationContext = new MockAuthenticationContext(MockAuthenticationContext.MockAuthenticationContextTestType.AcquireTokenAsyncClientCredentialSuccess);
 
             // Create ClientSecretAccessTokenProvider instance
-            var exception = Assert.Throws<ArgumentNullException>(() => new ClientSecretAccessTokenProvider(Constants.TestAppId, null, Constants.TenantId, Constants.AzureAdInstance, mockAuthenticationContext));
+            var exception = Assert.Throws<ArgumentNullException>(() => new ClientSecretAccessTokenProvider(Constants.TestAppId, null, Constants.ClientSecret, Constants.TenantId, Constants.AzureAdInstance, mockAuthenticationContext));
 
             Assert.Contains(Constants.CannotBeNullError, exception.ToString());
 
             // Create ClientSecretAccessTokenProvider instance
-            exception = Assert.Throws<ArgumentNullException>(() => new ClientSecretAccessTokenProvider(Constants.TestAppId, string.Empty, Constants.TenantId, Constants.AzureAdInstance, mockAuthenticationContext));
+            exception = Assert.Throws<ArgumentNullException>(() => new ClientSecretAccessTokenProvider(Constants.TestAppId, string.Empty, Constants.ClientSecret, Constants.TenantId, Constants.AzureAdInstance, mockAuthenticationContext));
+
+            Assert.Contains(Constants.CannotBeNullError, exception.ToString());
+        }
+
+        /// <summary>
+        /// If the clientSecretToRedact is null or empty, an exception should be thrown. 
+        /// </summary>
+        [Fact]
+        public void ClientSecretToRedactNullOrEmptyTest()
+        {
+            // MockAuthenticationContext is being asked to act like client secret auth suceeded. 
+            MockAuthenticationContext mockAuthenticationContext = new MockAuthenticationContext(MockAuthenticationContext.MockAuthenticationContextTestType.AcquireTokenAsyncClientCredentialSuccess);
+
+            // Create ClientSecretAccessTokenProvider instance
+            var exception = Assert.Throws<ArgumentNullException>(() => new ClientSecretAccessTokenProvider(Constants.TestAppId, Constants.ClientSecret, null, Constants.TenantId, Constants.AzureAdInstance, mockAuthenticationContext));
+
+            Assert.Contains(Constants.CannotBeNullError, exception.ToString());
+
+            // Create ClientSecretAccessTokenProvider instance
+            exception = Assert.Throws<ArgumentNullException>(() => new ClientSecretAccessTokenProvider(Constants.TestAppId, Constants.ClientSecret, string.Empty, Constants.TenantId, Constants.AzureAdInstance, mockAuthenticationContext));
 
             Assert.Contains(Constants.CannotBeNullError, exception.ToString());
         }

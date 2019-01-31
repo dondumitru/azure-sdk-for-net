@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 namespace Microsoft.Azure.Services.AppAuthentication
 {
@@ -21,6 +22,7 @@ namespace Microsoft.Azure.Services.AppAuthentication
         private const string App = "App";
         private const string AppId = "AppId";
         private const string AppKey = "AppKey";
+        private const string AppKeyPercentEncoded = "AppKeyPercentEncoded";
         private const string TenantId = "TenantId";
         private const string CertificateSubjectName = "CertificateSubjectName";
         private const string CertificateThumbprint = "CertificateThumbprint";
@@ -124,6 +126,19 @@ namespace Microsoft.Azure.Services.AppAuthentication
                             new ClientSecretAccessTokenProvider(
                                 connectionSettings[AppId],
                                 connectionSettings[AppKey],
+                                connectionSettings[AppKey], // literal value in connection string to redact
+                                connectionSettings[TenantId],
+                                azureAdInstance);
+                    }
+                    else if (connectionSettings.ContainsKey(AppKeyPercentEncoded))
+                    {
+                        ValidateAttribute(connectionSettings, AppKeyPercentEncoded, connectionString);
+
+                        azureServiceTokenProvider =
+                            new ClientSecretAccessTokenProvider(
+                                connectionSettings[AppId],
+                                PercentDecode(connectionSettings[AppKeyPercentEncoded]),
+                                connectionSettings[AppKeyPercentEncoded], // literal value in connection string to redact
                                 connectionSettings[TenantId],
                                 azureAdInstance);
                     }
@@ -149,6 +164,91 @@ namespace Microsoft.Azure.Services.AppAuthentication
 
             return azureServiceTokenProvider;
 
+        }
+
+        /// <summary>
+        /// Implement percent-decoding for a string.  This is equivalent to HttpUtility.UrlDecode (without
+        /// as many optimizations).  However, in .Net Standard 1.4, HttpUtility drags in an additional
+        /// dependency, so to keep AppAuthentication as streamlined as possible, PercentDecode is
+        /// re-implemented here.  If AppAuthentication support for .Net Standard 1.4 is removed, this method
+        /// could probably be removed and replaced with a call to HttpUtility.UrlDecode.
+        /// </summary>
+        /// <param name="input"></param>
+        /// <returns>The input string with %-encoded sequences replaced with their native characters.</returns>
+        internal static string PercentDecode(string input)
+        {
+            int? CharDecode(char ch)
+            {
+                if ((ch >= '0') && (ch <= '9'))
+                {
+                    return ch - '0';
+                }
+                if ((ch >= 'a') && (ch <= 'f'))
+                {
+                    return ch - 'a' + 10;
+                }
+                if ((ch >= 'A') && (ch <= 'F'))
+                {
+                    return ch - 'A' + 10;
+                }
+                return null;
+            }
+            if (input == null)
+            {
+                return null;
+            }
+            var resultBuilder = default(StringBuilder); // If the input string contains no %-sequences, then no allocations will be performed.
+            var builderIdx = 0; // resultBuilder contains the input string up to, but not including, this index.
+            var currIdx = 0; // The index of the next %-sequence to decode.
+            while (true)
+            {
+                currIdx = input.IndexOf('%', currIdx); // The index of the next %-sequence to decode.
+                if (currIdx == -1 || currIdx + 3 > input.Length)
+                {
+                    // Stop processing if no further %-sequences were found, or
+                    // if the trailing %sequence is truncated short by the end of
+                    // the string.
+                    break;
+                }
+                var msb = CharDecode(input[currIdx + 1]);
+                var lsb = CharDecode(input[currIdx + 2]);
+                if (!msb.HasValue || !lsb.HasValue)
+                {
+                    // Check for invalid %-sequences.  A valid %-sequence, like "%3b", will transfer (below) as a single
+                    // character, like ';', while an invalid sequence like "%qf" will hit this if-statement, causing it
+                    // to transfer verbatim as the 3-character sequence '%' 'q' 'f' without any decoding.
+                    ++currIdx;
+                    continue;
+                }
+                if (resultBuilder == null)
+                {
+                    // Decoding is actually required, so we need to allocate a buffer.
+                    resultBuilder = new StringBuilder();
+                }
+                if (builderIdx < currIdx)
+                {
+                    // Transfer any non-%-seqeuences from the input string, up to but not including
+                    // the currently-recognized %-sequence.
+                    resultBuilder.Append(input, builderIdx, currIdx - builderIdx);
+                }
+                // Append the single decoded character.
+                resultBuilder.Append((char)(msb * 16 + lsb));
+                // Advance the indexes past the current %-sequence.
+                builderIdx = currIdx + 3;
+                currIdx = currIdx + 3;
+            }
+            if (resultBuilder == null)
+            {
+                // If we didn't allocate the builder, that is our signal that no decoding was performed,
+                // in which case we just return the input string.
+                return input;
+            }
+            if (builderIdx < input.Length)
+            {
+                // Append any trailing non-%-sequence characters from the input onto the result.
+                resultBuilder.Append(input, builderIdx, input.Length - builderIdx);
+            }
+            return resultBuilder.ToString();
         }
 
         private static void ValidateAttribute(Dictionary<string, string> connectionSettings, string attribute,

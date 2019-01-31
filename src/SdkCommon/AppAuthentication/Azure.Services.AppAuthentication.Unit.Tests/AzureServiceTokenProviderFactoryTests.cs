@@ -3,6 +3,7 @@
 
 using Microsoft.Azure.Services.AppAuthentication.TestCommon;
 using System;
+using System.Collections.Generic;
 using Xunit;
 
 namespace Microsoft.Azure.Services.AppAuthentication.Unit.Tests
@@ -194,6 +195,101 @@ namespace Microsoft.Azure.Services.AppAuthentication.Unit.Tests
             Assert.NotNull(provider);
             Assert.Equal(Constants.ClientSecretConnString, provider.ConnectionString);
             Assert.IsType<ClientSecretAccessTokenProvider>(provider);
+        }
+
+        /// <summary>
+        /// UrlDecode handles null input, returning null.
+        /// </summary>
+        [Fact]
+        public void UrlDecodeNull()
+        {
+            var actual = AzureServiceTokenProviderFactory.PercentDecode(null);
+            Assert.Null(actual);
+        }
+
+        /// <summary>
+        /// If UrlDecode does not find any %-sequences, it directly returns its input.
+        /// </summary>
+        [Fact]
+        public void UrlDecodeReferenceEquals()
+        {
+            var expected = "expected";
+            var actual = AzureServiceTokenProviderFactory.PercentDecode(expected);
+            Assert.Same(actual, expected);
+        }
+
+        /// <summary>
+        /// If UrlDecode encounters an invalid sequence, it emits it directly to the output
+        /// </summary>
+        [Fact]
+        public void UrlDecodeInvalid()
+        {
+            var expected = "%xx";
+            var actual = AzureServiceTokenProviderFactory.PercentDecode(expected);
+            Assert.Same(actual, expected);
+        }
+
+        /// <summary>
+        /// UrlDecode handles all sequences in the ordinal range 0..255.
+        /// </summary>
+        [Fact]
+        public void UrlDecodeSequence()
+        {
+            IEnumerable<Tuple<char, int>> Nibbles()
+            {
+                yield return Tuple.Create('0', 0);
+                yield return Tuple.Create('1', 1);
+                yield return Tuple.Create('2', 2);
+                yield return Tuple.Create('3', 3);
+                yield return Tuple.Create('4', 4);
+                yield return Tuple.Create('5', 5);
+                yield return Tuple.Create('6', 6);
+                yield return Tuple.Create('7', 7);
+                yield return Tuple.Create('8', 8);
+                yield return Tuple.Create('9', 9);
+                yield return Tuple.Create('a', 10);
+                yield return Tuple.Create('b', 11);
+                yield return Tuple.Create('c', 12);
+                yield return Tuple.Create('d', 13);
+                yield return Tuple.Create('e', 14);
+                yield return Tuple.Create('f', 15);
+                yield return Tuple.Create('A', 10);
+                yield return Tuple.Create('B', 11);
+                yield return Tuple.Create('C', 12);
+                yield return Tuple.Create('D', 13);
+                yield return Tuple.Create('E', 14);
+                yield return Tuple.Create('F', 15);
+            }
+            foreach (var msb in Nibbles())
+            {
+                foreach (var lsb in Nibbles())
+                {
+                    var input = $"%{msb.Item1}{lsb.Item1}";
+                    var expected = $"{(char)(msb.Item2 * 16 + lsb.Item2)}";
+                    var actual = AzureServiceTokenProviderFactory.PercentDecode(input);
+                    Assert.Equal(actual, expected);
+                }
+            }
+        }
+
+        /// <summary>
+        /// UrlDecode handles incomplete sequences at the end of the string.
+        /// </summary>
+        [Fact]
+        public void UrlDecodeTruncated()
+        {
+            var expected = "expected%2";
+            var actual = AzureServiceTokenProviderFactory.PercentDecode(expected);
+            Assert.Equal(actual, expected);
+        }
+
+        [Fact]
+        public void UrlDecodeComplex()
+        {
+            var input = "first%3bmiddle%3blast";
+            var expected = "first;middle;last";
+            var actual = AzureServiceTokenProviderFactory.PercentDecode(input);
+            Assert.Equal(actual, expected);
         }
     }
 }

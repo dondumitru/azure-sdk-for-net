@@ -49,6 +49,7 @@ namespace Microsoft.Azure.Services.AppAuthentication.TestCommon
 
         // Connection strings
         public static readonly string ClientSecret = "Secret";
+        public static readonly string ClientSecretPercentEncoded = "%3bSecret";
         public static readonly string IntegratedAuthConnectionString = "RunAs = CurrentUser;";
         public static readonly string AzureCliConnectionString = "RunAs=Developer; DeveloperTool=AzureCli";
         public static readonly string VisualStudioConnectionString = "RunAs=Developer; DeveloperTool=VisualStudio";
@@ -70,6 +71,7 @@ namespace Microsoft.Azure.Services.AppAuthentication.TestCommon
         public static readonly string CertificateConnStringSubjectNameCurrentUser = $"RunAs=App;AppId={TestAppId};TenantId={TenantId};CertificateSubjectName=123;CertificateStoreLocation=CurrentUser";
         public static readonly string CertificateConnStringKeyVaultSecretIdentifier = $"RunAs=App;AppId={TestAppId};TenantId={TenantId};KeyVaultSecretIdentifier=SecretIdentifier";
         public static readonly string ClientSecretConnString = $"RunAs=App;AppId={TestAppId};TenantId={TenantId};AppKey={ClientSecret}";
+        public static readonly string ClientSecretPercentEncodedConnString = $"RunAs=App;AppId={TestAppId};TenantId={TenantId};AppKeyPercentEncoded={ClientSecretPercentEncoded}";
         public static readonly string ConnectionStringEnvironmentVariableName = "AzureServicesAuthConnectionString";
         public static readonly string CurrentUserStore = "CurrentUser";
         public static readonly string InvalidString = "Invalid";

@@ -290,6 +290,49 @@ namespace Microsoft.Azure.Services.AppAuthentication.IntegrationTests
             Validator.ValidateToken(authResult.AccessToken, astp.PrincipalUsed, Constants.AppType, _tenantId, app.AppId, expiresOn: authResult.ExpiresOn);
         }
 
+        [Fact]
+        public async Task GetTokenUsingServicePrincipalWithClientSecretPercentEncodedTest()
+        {
+            GraphHelper graphHelper = new GraphHelper(_tenantId);
+            string secretBase = Convert.ToBase64String(Encoding.ASCII.GetBytes(Guid.NewGuid().ToString())); // this generation algorithm never creates characters that need encoding inside the secret
+            string secret = ";" + secretBase; // the ; character requires encoding inside the secret, because of how the connection string parser works
+            string secretPercentEncoded = "%3b" + secretBase; // %3b is the encoded ;
+            Application app = await graphHelper.CreateApplicationAsync(secret);
+
+            // Get token using service principal
+            AppAuthenticationResult authResult = null;
+            int count = 5;
+
+            Environment.SetEnvironmentVariable(Constants.ConnectionStringEnvironmentVariableName, $"RunAs=App;TenantId={_tenantId};AppId={app.AppId};AppKeyPercentEncoded={secretPercentEncoded}");
+            AzureServiceTokenProvider astp = new AzureServiceTokenProvider();
+
+            while (authResult == null && count > 0)
+            {
+                try
+                {
+                    authResult = await astp.GetAuthenticationResultAsync(Constants.SqlAzureResourceId, _tenantId);
+
+                    await astp.GetAccessTokenAsync(Constants.KeyVaultResourceId);
+
+                }
+                catch
+                {
+                    // It takes time for Azure AD to realize a new application has been added. 
+                    await Task.Delay(15000);
+
+                    count--;
+                }
+
+            }
+
+            // Delete the application
+            await graphHelper.DeleteApplicationAsync(app);
+
+            Environment.SetEnvironmentVariable(Constants.ConnectionStringEnvironmentVariableName, null);
+
+            Validator.ValidateToken(authResult.AccessToken, astp.PrincipalUsed, Constants.AppType, _tenantId, app.AppId, expiresOn: authResult.ExpiresOn);
+        }
+
 #if net472
         /// <summary>
         /// One must be logged in using Azure CLI and set AppAuthenticationTestSqlDbEndpoint to a SQL Azure database endpoint before running this test.
